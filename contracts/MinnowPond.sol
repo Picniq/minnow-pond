@@ -79,7 +79,7 @@ contract MinnowPond is Ownable {
         _totalPeriods = 1;
     }
 
-    modifier _inDeposit() {
+    modifier inDeposit() {
         require(_inDepositSwitch == 1, "Deposit in progress");
         _inDepositSwitch = 2;
         _;
@@ -140,7 +140,7 @@ contract MinnowPond is Ownable {
      * @dev Function to deposit funds to the pool for a period. Once the
      * deposit amount surpasses a threshold, the period closes and new one begins.
      */
-    function makeDeposit() external payable _inDeposit returns (bool) {
+    function makeDeposit() external payable inDeposit returns (bool) {
         // We limit the amount of ETH in each period to prevent front-running bots
         require(
             msg.value > 0.005 ether && msg.value <= 1 ether,
