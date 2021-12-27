@@ -14,7 +14,7 @@ import "./libraries/MerkleProof.sol";
  */
 
 // solhint-disable not-rely-on-time, no-empty-blocks
-contract SwapAndClaim {
+contract SwapAndClaim is Ownable {
     using SafeMath for uint256;
     using MerkleProof for bytes32[];
 
@@ -50,8 +50,9 @@ contract SwapAndClaim {
 
     receive() external payable {}
 
-    modifier _inSwap() {
-        require(_inSwapSwitch == 1, "Deposit in progress");
+    // Protect against reentrancy
+    modifier inSwap() {
+        require(_inSwapSwitch == 1, "Swap in progress");
         _inSwapSwitch = 2;
         _;
         _inSwapSwitch = 1;
@@ -79,21 +80,27 @@ contract SwapAndClaim {
         uint256 percent
     ) external returns (bool) {
         SwapData storage swap = _swaps[token][period];
+
         require(swap.id != 0, "Swap not found");
         require(!checkClaimed(token, msg.sender, period), "Already claimed");
 
+        // Double check proof data to validate claim
         bytes32 leaf = keccak256(abi.encodePacked(percent, msg.sender));
         require(
             MerkleProof.verify(proof, swap.merkleRoot, leaf),
             "Proof failed"
         );
 
+        // Mark as claimed
         _claimed[swap.id][msg.sender] = true;
+        
+        // Get percent owed to claimant
         uint256 amountToSend = swap.amountReceived.mul(percent).div(1e18);
         require(
             amountToSend <= token.balanceOf(address(this)),
             "Amount greater than balance"
         );
+
         token.transfer(msg.sender, amountToSend);
 
         return true;
@@ -109,7 +116,7 @@ contract SwapAndClaim {
         uint256 period,
         bool isFeeOnTransfer,
         bytes32 merkleRoot
-    ) external payable _inSwap {
+    ) external payable onlyOwner inSwap {
         require(_swaps[token][period].id == 0, "Swap made for period");
         require(ethAmount <= address(this).balance, "Swap exceeds balance");
 
