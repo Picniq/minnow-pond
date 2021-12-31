@@ -73,12 +73,12 @@ contract SwapAndClaim is Ownable {
     /**
      * @dev Checks proof and if valid, claims token for the claimant.
      */
-    function claimTokens(
+    function checkProof(
         IERC20 token,
         uint256 period,
         bytes32[] calldata proof,
         uint256 percent
-    ) external returns (bool) {
+    ) private returns (uint256) {
         SwapData storage swap = _swaps[token][period];
 
         require(swap.id != 0, "Swap not found");
@@ -101,9 +101,54 @@ contract SwapAndClaim is Ownable {
             "Amount greater than balance"
         );
 
+        return amountToSend;
+    }
+
+    /**
+     * @dev Claim tokens and send to user
+     */
+    function claimTokens(
+        IERC20 token,
+        uint256 period,
+        bytes32[] calldata proof,
+        uint256 percent
+    ) external returns (bool) {
+        uint256 amountToSend = checkProof(token, period, proof, percent);
+        require(amountToSend > 0, "Amount is zero");
+
         token.transfer(msg.sender, amountToSend);
 
         return true;
+    }
+
+    /**
+     * @dev Claim and swap tokens in one tx so users don't have to take control of funds directly.
+     */
+    function claimAndSwap(
+        IERC20 token,
+        uint256 period,
+        bytes32[] calldata proof,
+        uint256 percent,
+        uint256 expected,
+        uint256 slippage, // Pass slippage as 1e18 where 1e18 = 100%
+        bool isFeeOnTransfer
+    ) external {
+        uint256 amountToSend = checkProof(token, period, proof, percent);
+        require(amountToSend > 0, "Amount cannot be 0");
+
+        address[] memory path = new address[](2);
+        path[0] = address(token);
+        path[1] = _uniswapRouter.WETH();
+
+        if (isFeeOnTransfer) {
+            _uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
+                amountToSend, expected.mul(slippage).div(1e18), path, msg.sender, block.timestamp
+            );
+        } else {
+            _uniswapRouter.swapExactTokensForETH(
+                amountToSend, expected.mul(slippage).div(1e18), path, msg.sender, block.timestamp
+            );
+        }
     }
 
     /**
