@@ -27,7 +27,8 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       forking: {
-        url: process.env.ETHEREUM_API || ""
+        url: process.env.ETHEREUM_API || "",
+        blockNumber: 13914857
       }
     },
     ropsten: {
